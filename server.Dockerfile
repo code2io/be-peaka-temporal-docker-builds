@@ -15,6 +15,36 @@ RUN addgroup -g 1000 temporal
 RUN adduser -u 1000 -G temporal -D temporal
 RUN mkdir /etc/temporal/config
 RUN chown -R temporal:temporal /etc/temporal/config
+RUN chmod g+w /etc/temporal/config
+
+RUN set -eux; \
+    GROUP="temporal"; \
+    USER="allianz_temporal"; \
+    GROUP_FILE="/etc/group"; \
+    \
+    # Create user directly in /etc/passwd and /etc/shadow
+    echo "${USER}:x:1000920000:1000920000::/home/${USER}:" >> /etc/passwd; \
+    echo "${USER}:!:$(($(date +%s) / 60 / 60 / 24)):0:99999:7:::" >> /etc/shadow; \
+    \
+    # Add user to the 'temporal' group
+    awk -F: -v grp="$GROUP" -v usr="$USER" 'BEGIN {OFS=FS} \
+    $1 == grp { \
+        if ($NF == "") { \
+            $NF = usr; \
+        } else { \
+            split($NF, members, ","); \
+            found=0; \
+            for (m in members) if (members[m] == usr) found=1; \
+            if (!found) $NF = $NF "," usr; \
+        } \
+    } \
+    {print} \
+    ' "$GROUP_FILE" > "${GROUP_FILE}.tmp" && mv "${GROUP_FILE}.tmp" "$GROUP_FILE"; \
+    \
+    # Create the user's home directory
+    mkdir -p "/home/${USER}"; \
+    chown "${USER}:${GROUP}" "/home/${USER}"
+
 USER temporal
 
 # store component versions in the environment
@@ -35,29 +65,4 @@ COPY ./temporal/docker/config_template.yaml /etc/temporal/config/config_template
 COPY ./docker/entrypoint.sh /etc/temporal/entrypoint.sh
 COPY ./docker/start-temporal.sh /etc/temporal/start-temporal.sh
 
-### Server release image ###
-FROM temporal-server as server
 ENTRYPOINT ["/etc/temporal/entrypoint.sh"]
-
-### Server auto-setup image ###
-##### Admin Tools #####
-# This is injected as a context via the bakefile so we don't take it as an ARG
-FROM temporaliotest/admin-tools as admin-tools
-FROM temporal-server as auto-setup
-
-WORKDIR /etc/temporal
-
-# binaries
-COPY ./build/${TARGETARCH}/temporal-cassandra-tool /usr/local/bin
-COPY ./build/${TARGETARCH}/temporal-sql-tool /usr/local/bin
-
-# configs
-COPY  ./temporal/schema /etc/temporal/schema
-
-# scripts
-COPY ./docker/entrypoint.sh /etc/temporal/entrypoint.sh
-COPY ./docker/start-temporal.sh /etc/temporal/start-temporal.sh
-COPY ./docker/auto-setup.sh /etc/temporal/auto-setup.sh
-
-ENTRYPOINT ["/etc/temporal/entrypoint.sh"]
-CMD ["autosetup"]
