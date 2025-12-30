@@ -1,6 +1,6 @@
 ARG BASE_SERVER_IMAGE=temporalio/base-server:1.15.12
 
-FROM ${BASE_SERVER_IMAGE} as temporal-server
+FROM ${BASE_SERVER_IMAGE} AS temporal-server
 ARG TARGETARCH
 ARG TEMPORAL_SHA=unknown
 ARG TCTL_SHA=unknown
@@ -23,7 +23,7 @@ RUN set -eux; \
     GROUP_FILE="/etc/group"; \
     \
     # Create user directly in /etc/passwd and /etc/shadow
-    echo "${USER}:x:1000920000:1000920000::/home/${USER}:" >> /etc/passwd; \
+    echo "${USER}:x:1000810000:1000810000::/home/${USER}:" >> /etc/passwd; \
     echo "${USER}:!:$(($(date +%s) / 60 / 60 / 24)):0:99999:7:::" >> /etc/shadow; \
     \
     # Add user to the 'temporal' group
